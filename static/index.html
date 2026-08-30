@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="File Sharing Platform — live cluster status dashboard showing node health, file status, and real-time events.">
+  <title>File Sharing Platform — Cluster Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background blobs -->
+  <div class="ambient-bg">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="app">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header-left">
+        <div class="logo">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="2" y="2" width="24" height="24" rx="6" stroke="url(#logo-grad)" stroke-width="2.5"/>
+            <circle cx="9" cy="14" r="2" fill="url(#logo-grad)"/>
+            <circle cx="14" cy="14" r="2" fill="url(#logo-grad)"/>
+            <circle cx="19" cy="14" r="2" fill="url(#logo-grad)"/>
+            <line x1="9" y1="14" x2="14" y2="14" stroke="url(#logo-grad)" stroke-width="1.5"/>
+            <line x1="14" y1="14" x2="19" y2="14" stroke="url(#logo-grad)" stroke-width="1.5"/>
+            <defs>
+              <linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28">
+                <stop stop-color="#6366f1"/>
+                <stop offset="1" stop-color="#a78bfa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h1 class="header-title">Cluster Dashboard</h1>
+      </div>
+      <div class="header-right">
+        <span class="status-dot" id="conn-dot"></span>
+        <span class="conn-label" id="conn-label">Connecting…</span>
+      </div>
+    </header>
+
+    <!-- Summary cards -->
+    <section class="cards-row" id="summary-cards">
+      <div class="card card-nodes" id="card-nodes-up">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <rect x="1" y="5" width="18" height="10" rx="3" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="6" cy="10" r="1.5" fill="currentColor"/>
+            <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
+            <circle cx="14" cy="10" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-value" id="nodes-up-count">–</span>
+          <span class="card-label">Nodes Up</span>
+        </div>
+      </div>
+      <div class="card card-files" id="card-files-total">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M3 4a2 2 0 012-2h4l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-value" id="files-total-count">–</span>
+          <span class="card-label">Total Files</span>
+        </div>
+      </div>
+      <div class="card card-available" id="card-files-available">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-value" id="files-available-count">–</span>
+          <span class="card-label">Available</span>
+        </div>
+      </div>
+      <div class="card card-degraded" id="card-files-degraded">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M10 3L18 17H2L10 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <line x1="10" y1="8" x2="10" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="10" cy="14.5" r="0.75" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-value" id="files-degraded-count">–</span>
+          <span class="card-label">Degraded</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main grid: Nodes + Events -->
+    <section class="main-grid">
+      <!-- Nodes panel -->
+      <div class="panel panel-nodes" id="nodes-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Data Keepers</h2>
+          <span class="badge" id="nodes-badge">0</span>
+        </div>
+        <div class="panel-body">
+          <table class="nodes-table" id="nodes-table">
+            <thead>
+              <tr>
+                <th>Node</th>
+                <th>Status</th>
+                <th>Threads</th>
+                <th>Disk Free</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="nodes-tbody">
+              <tr><td colspan="5" class="empty-msg">Waiting for nodes…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Events panel -->
+      <div class="panel panel-events" id="events-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Live Events</h2>
+          <span class="badge badge-live" id="events-badge">
+            <span class="pulse-dot"></span> live
+          </span>
+        </div>
+        <div class="panel-body">
+          <ul class="events-list" id="events-list">
+            <li class="empty-msg">No events yet…</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>File Sharing Platform · Built with Python &amp; Flask</span>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
