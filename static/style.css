@@ -132,6 +132,35 @@ body { font-family: var(--font-sans); background: var(--bg-deep); color: var(--t
 /* Footer */
 .footer { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 1.5rem 0; border-top: 1px solid var(--border-subtle); }
 
+.packet-panel { margin-top: 1.5rem; }
+.packet-demo-body { display: flex; flex-direction: column; gap: 1rem; }
+.packet-demo-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.packet-demo-btn { min-width: 135px; }
+.packet-progress-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+.packet-progress-bar { height: 12px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.12); border-radius: 999px; overflow: hidden; }
+.packet-progress-bar .progress-fill { width: 0; }
+.packet-progress-label { font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-mono); }
+.packet-legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.72rem; color: var(--text-secondary); }
+.packet-legend span { display: inline-flex; align-items: center; gap: 0.45rem; }
+.legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.legend-dot.received { background: var(--green); }
+.legend-dot.missing { background: var(--red); }
+.legend-dot.resent { background: var(--amber); }
+.legend-dot.pending { background: rgba(148, 163, 184, 0.8); }
+.packet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 0.65rem; }
+.packet-card { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.65rem 0.5rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: rgba(15, 23, 42, 0.28); text-align: center; transition: transform 0.2s ease, border-color 0.2s ease; }
+.packet-card:hover { transform: translateY(-1px); border-color: var(--border-glow); }
+.packet-card.received { border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
+.packet-card.missing { border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); }
+.packet-card.resent { border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.08); }
+.packet-card.pending { border-color: rgba(148, 163, 184, 0.25); background: rgba(148, 163, 184, 0.04); }
+.packet-number { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; color: var(--text-primary); }
+.packet-status { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.packet-card.received .packet-status { color: var(--green); }
+.packet-card.missing .packet-status { color: var(--red); }
+.packet-card.resent .packet-status { color: var(--amber); }
+.packet-card.pending .packet-status { color: var(--text-muted); }
+
 /* Responsive */
 @media (max-width: 768px) { .cards-row { grid-template-columns: repeat(2, 1fr); } .main-grid { grid-template-columns: 1fr; } }
-@media (max-width: 480px) { .cards-row { grid-template-columns: 1fr; } .app { padding: 1rem; } }
+@media (max-width: 480px) { .cards-row { grid-template-columns: 1fr; } .app { padding: 1rem; } .packet-demo-actions { flex-direction: column; } .packet-demo-btn { width: 100%; } }

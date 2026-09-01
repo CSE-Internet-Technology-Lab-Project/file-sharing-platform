@@ -109,6 +109,91 @@ async function act(nodeId, action) {
   }
 }
 
+const packetDemoState = {
+  totalPackets: 12,
+  received: [],
+  missing: [],
+  resent: [],
+  status: 'idle'
+};
+
+function renderPacketDemo() {
+  const grid = document.getElementById('packet-grid');
+  if (!grid) return;
+
+  const allPackets = Array.from({ length: packetDemoState.totalPackets }, (_, index) => index);
+  const receivedSet = new Set(packetDemoState.received);
+  const missingSet = new Set(packetDemoState.missing);
+  const resentSet = new Set(packetDemoState.resent);
+
+  grid.innerHTML = allPackets.map((packetId) => {
+    let cssClass = 'pending';
+    let label = 'Pending';
+
+    if (receivedSet.has(packetId)) {
+      cssClass = 'received';
+      label = 'Received';
+    } else if (missingSet.has(packetId)) {
+      cssClass = 'missing';
+      label = 'Missing';
+    } else if (resentSet.has(packetId)) {
+      cssClass = 'resent';
+      label = 'Resent';
+    }
+
+    return `
+      <div class="packet-card ${cssClass}">
+        <div class="packet-number">#${packetId}</div>
+        <div class="packet-status">${label}</div>
+      </div>
+    `;
+  }).join('');
+
+  const receivedCount = packetDemoState.received.length;
+  const progress = (receivedCount / packetDemoState.totalPackets) * 100;
+  const fill = document.getElementById('packet-progress-fill');
+  const text = document.getElementById('packet-progress-text');
+
+  if (fill) fill.style.width = `${progress}%`;
+  if (text) text.textContent = `${receivedCount} / ${packetDemoState.totalPackets} packets received`;
+}
+
+function startPacketDemo() {
+  packetDemoState.totalPackets = 12;
+  packetDemoState.received = Array.from({ length: 8 }, (_, index) => index);
+  packetDemoState.missing = [];
+  packetDemoState.resent = [];
+  packetDemoState.status = 'transfer';
+  renderPacketDemo();
+}
+
+function simulateNetworkDrop() {
+  const received = [...packetDemoState.received];
+  packetDemoState.missing = [4, 9];
+  packetDemoState.received = received.filter((packetId) => !packetDemoState.missing.includes(packetId));
+  packetDemoState.resent = [];
+  packetDemoState.status = 'drop';
+  renderPacketDemo();
+}
+
+function resumeMissingPackets() {
+  if (!packetDemoState.missing.length) {
+    packetDemoState.received = Array.from({ length: packetDemoState.totalPackets }, (_, index) => index);
+    packetDemoState.resent = [];
+    packetDemoState.status = 'complete';
+    renderPacketDemo();
+    return;
+  }
+
+  packetDemoState.resent = [...packetDemoState.missing];
+  packetDemoState.received = [...new Set([...packetDemoState.received, ...packetDemoState.missing])].sort((a, b) => a - b);
+  packetDemoState.missing = [];
+  packetDemoState.status = 'resume';
+  renderPacketDemo();
+}
+
+startPacketDemo();
+
 // Start polling
 setInterval(refresh, POLL_INTERVAL);
 refresh();

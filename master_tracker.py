@@ -231,6 +231,14 @@ def login():
     return jsonify({"token": token})
 
 
+@app.route("/users", methods=["GET"])
+def list_all_users():
+    user_id, err = _auth_required()
+    if err:
+        return err
+    return jsonify(db.list_users())
+
+
 # ── Upload ──
 
 @app.route("/files/upload/init", methods=["POST"])
@@ -430,6 +438,34 @@ def download_plan(file_id):
 
 # ── ACL ──
 
+@app.route("/files/<file_id>/share", methods=["POST"])
+def share_file_by_username(file_id):
+    user_id, err = _auth_required()
+    if err:
+        return err
+    if not db.check_permission(file_id, user_id, "owner"):
+        return jsonify({"error": "forbidden — owner only"}), 403
+
+    data = request.get_json(force=True)
+    target_username = (data.get("username") or "").strip()
+    permission = data.get("permission", "viewer")
+    if permission not in ("owner", "editor", "viewer"):
+        return jsonify({"error": "invalid permission"}), 400
+    if not target_username:
+        return jsonify({"error": "username is required"}), 400
+
+    target_user = db.get_user_by_username(target_username)
+    if not target_user:
+        return jsonify({"error": f"user '{target_username}' not found"}), 404
+
+    db.set_acl(file_id, target_user["id"], permission)
+    return jsonify({
+        "ok": True,
+        "shared_with": target_user["username"],
+        "permission": permission,
+    })
+
+
 @app.route("/files/<file_id>/acl", methods=["PUT"])
 def set_file_acl(file_id):
     user_id, err = _auth_required()
@@ -540,8 +576,13 @@ def main():
     print("[tracker] database initialised")
 
     # 2. Start TCP event listener on port 8001
-    start_event_listener(8001, dispatch)
-    print("[tracker] event listener on port 8001")
+    try:
+        start_event_listener(8001, dispatch)
+        print("[tracker] event listener on port 8001")
+    except OSError as exc:
+        print(f"[tracker] failed to bind event listener on port 8001: {exc}")
+        print("[tracker] another tracker instance may still be running. Stop it and retry.")
+        raise SystemExit(1)
 
     # 3. Start failure-sweep background thread
     threading.Thread(target=_failure_sweep, daemon=True).start()
@@ -552,7 +593,7 @@ def main():
 
     # 5. Start Flask on port 8000
     print("[tracker] starting Flask on port 8000")
-    app.run(host="0.0.0.0", port=8000, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=8000, debug=False, threaded=True, use_reloader=False)
 
 
 if __name__ == "__main__":

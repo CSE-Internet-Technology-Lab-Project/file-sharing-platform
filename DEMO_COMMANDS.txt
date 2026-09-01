@@ -1,0 +1,281 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                  FILE SHARING PLATFORM - QUICK DEMO SETUP                  ║
+║                                                                            ║
+║  Everything you need to show your teacher in 30 minutes                   ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BEFORE YOU START:
+  • Read: TEACHER_PRESENTATION.md (your main guide)
+  • Open 3 terminals
+  • Have http://localhost:8501 in your browser ready
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TERMINAL 1 (SERVICE STARTUP):
+─────────────────────────────
+
+  $ cd /home/irshadsiddi/Desktop/Projects/FIle_sharing_Platform
+  $ bash start_all.sh
+
+  ⏳ Wait for:
+    ✓ Master Tracker started on port 8000
+    ✓ Data Keeper 1 started on port 9001
+    ✓ Data Keeper 2 started on port 9002
+    ✓ Data Keeper 3 started on port 9003
+    ✓ Streamlit UI loading at http://localhost:8501
+
+  🎬 Keep this running during entire demo\!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TERMINAL 2 (RUN DEMO):
+──────────────────────
+
+  Option A: Full Automated Demo (RECOMMENDED)
+  ────────────────────────────────────────────
+  $ cd /home/irshadsiddi/Desktop/Projects/FIle_sharing_Platform
+  $ python3 demo.py
+  
+  ✓ Automatically: registers users, uploads file, shows storage, downloads
+  ✓ Verifies download matches original (byte-for-byte)
+  ⏱️  Takes ~15 seconds
+
+  Output shows:
+    ├─ User registration (alice, bob)
+    ├─ File upload progress
+    ├─ Storage locations (/data/keeper*/chunks)
+    ├─ File download
+    ├─ Verification: ✓ Files match perfectly\!
+    └─ Total stats
+
+
+  Option B: Manual Step-by-Step
+  ──────────────────────────────
+  1. Go to http://localhost:8501 (Web UI)
+  2. Auth Tab → Register (alice / pass123)
+  3. Auth Tab → Login
+  4. Upload Tab → Choose file → Upload
+  5. Watch progress bar
+  6. Files Tab → See your file listed
+  7. Files Tab → Download file
+  8. Cluster Tab → Observe 3 keepers with chunks distributed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TERMINAL 3 (INSPECT STORAGE):
+─────────────────────────────
+
+  After demo runs, show where files actually are:
+
+  $ bash show_storage.sh
+
+  Output:
+    KEEPER1 (Port 9001)
+      ├─ file123_chunk0 (5 KB)
+      └─ Total: 1 chunk, 5 KB
+    
+    KEEPER2 (Port 9002)
+      ├─ file123_chunk0 (5 KB) [replica]
+      ├─ file123_chunk1 (5 KB)
+      └─ Total: 2 chunks, 10 KB
+    
+    KEEPER3 (Port 9003)
+      ├─ file123_chunk1 (5 KB) [replica]
+      └─ Total: 1 chunk, 5 KB
+
+  Key teaching point:
+    ✓ Same file replicated across 3 servers
+    ✓ If any 1 server dies, file still complete
+    ✓ If 2 servers die, file recovers automatically
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BROWSER (WEB UI):
+─────────────────
+
+  Always available at: http://localhost:8501
+
+  4 Tabs:
+
+  1. AUTH
+     ├─ Register new users
+     ├─ Login to get token
+     └─ Shows: username, auth token
+
+  2. UPLOAD
+     ├─ Select file to upload
+     ├─ Set chunk size (1-32 MB)
+     ├─ Set parallelism (1-16)
+     └─ Shows: real-time progress, chunks created, status
+
+  3. FILES
+     ├─ List all your uploaded files
+     ├─ Download with 1 click
+     ├─ Delete files
+     └─ Shows: filename, size, status, created time
+
+  4. CLUSTER ⭐ (Best for showing to teacher)
+     ├─ Shows all 3 keepers
+     ├─ Shows chunk distribution (which file chunks on which keeper)
+     ├─ Shows replication status
+     ├─ Shows recent events (uploads, downloads, heartbeats)
+     ├─ KILL button: Simulate keeper failure
+     ├─ REVIVE button: Bring keeper back
+     └─ Watch automatic recovery when keeper dies\!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE "WOW" MOMENT: Simulate Keeper Failure
+───────────────────────────────────────────
+
+  1. In Web UI, go to CLUSTER tab
+  2. Click KILL button next to Keeper2
+  3. Watch:
+     • Keeper2 status → "down" (after 3 seconds)
+     • File status → "degraded"
+     • System detects missing chunks
+  4. Wait 2 seconds...
+     • Chunks auto-replicate to healthy keeper
+     • File status → "available" again
+  5. Click REVIVE button to bring Keeper2 back
+
+  Result: File NEVER lost, service NEVER interrupted ✓
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+API COMMANDS (For Technical Audience):
+───────────────────────────────────────
+
+  Check cluster status:
+  $ curl http://localhost:8000/api/status | jq .
+
+  Upload file:
+  $ curl -X POST http://localhost:8000/files/upload/init \
+    -H "Authorization: Bearer TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"filename":"test.txt","size_bytes":1000,"chunk_size_mb":1}'
+
+  List files:
+  $ curl http://localhost:8000/files \
+    -H "Authorization: Bearer TOKEN"
+
+  Download file:
+  $ curl http://localhost:8000/files/FILE_ID/download \
+    -H "Authorization: Bearer TOKEN"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DATABASE INSPECTION:
+────────────────────
+
+  SQLite database stores all metadata:
+
+  $ sqlite3 tracker.db
+
+  Inside sqlite3:
+    SELECT * FROM files;          -- See all uploaded files
+    SELECT * FROM chunks;         -- See all chunks
+    SELECT * FROM chunk_locations;-- See where each chunk is stored
+    SELECT * FROM events_log;     -- See all system events
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TROUBLESHOOTING:
+────────────────
+
+  "Connection refused"
+    → Make sure Terminal 1 is running: bash start_all.sh
+    → Wait 3-5 seconds for services to start
+
+  "Port 8501 not opening"
+    → Streamlit takes 5-10 seconds to load
+    → Check Terminal 1 logs for errors
+
+  "Files not in /data/keeper*/"
+    → Kill demo and re-run
+    → Check database: sqlite3 tracker.db "SELECT * FROM files;"
+
+  "Can't download file"
+    → Make sure file is in "available" status (not degraded)
+    → Check Cluster tab to see if keepers are healthy
+
+  "Cluster shows 'down' nodes"
+    → Normal\! Nodes have 3-second timeout
+    → They recover automatically
+    → See logs: tail -f /tmp/tracker.log
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEMO TIMELINE (30 minutes):
+───────────────────────────
+
+  0:00  - Start system: bash start_all.sh (Terminal 1)
+  0:05  - Services started, Web UI ready
+  0:05  - Explain architecture to class (5 min)
+  0:10  - Run demo: python3 demo.py (Terminal 2)
+  0:25  - Show storage: bash show_storage.sh (Terminal 3)
+  0:28  - Simulate failure in Web UI (Cluster tab → KILL)
+  0:30  - Show recovery → Answer questions
+
+  Total: 30 minutes exactly\!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KEY FEATURES TO HIGHLIGHT:
+──────────────────────────
+
+  ✓ Distributed Storage: Files split and stored on multiple servers
+  ✓ Automatic Replication: Every chunk backed up on 2 servers
+  ✓ Failure Detection: Heartbeat-based (3-second timeout)
+  ✓ Automatic Recovery: Chunks re-replicate without manual intervention
+  ✓ Data Verification: SHA-256 checksums guarantee integrity
+  ✓ Parallel Transfers: Upload/download multiple chunks simultaneously
+  ✓ Live Dashboard: Real-time cluster status in Web UI
+  ✓ API Access: Full REST API for programmatic use
+  ✓ Database Tracking: SQLite stores all metadata
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DOCUMENTATION:
+───────────────
+
+  TEACHER_PRESENTATION.md  ← Your detailed guide (read this\!)
+  TEACHER_DEMO.md          ← Step-by-step demo instructions
+  VISUAL_FLOW.md           ← Architecture diagrams
+  README.md                ← Full technical documentation
+  QUICK_REFERENCE.md       ← Code examples and API reference
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+QUESTIONS TO EXPECT:
+────────────────────
+
+  Q: Why replicate data?
+  A: If 1 server fails, you still have the data on another server
+
+  Q: How does the system know a server is down?
+  A: Heartbeat timeout - if no heartbeat for 3 seconds, marked as down
+
+  Q: What happens during re-replication?
+  A: System copies missing chunks to healthy servers - takes 1-2 seconds
+
+  Q: Can multiple servers die and still recover?
+  A: Yes\! With 2x replication, system survives 1 server failure
+     With 3x replication, system survives 2 server failures
+
+  Q: Why UDP instead of TCP?
+  A: UDP allows resumable downloads - if connection drops,
+     resume from last received packet instead of starting over
+
+  Q: How do users access this?
+  A: Web UI (http://localhost:8501) or REST API or Python client
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOU'RE ALL SET\! 🚀
+
+Good luck with your demonstration\!
+Questions? Check TEACHER_PRESENTATION.md for detailed explanation.
+

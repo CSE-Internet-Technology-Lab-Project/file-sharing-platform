@@ -81,6 +81,33 @@ def _safe_request(method: str, url: str, **kwargs) -> tuple[requests.Response | 
         return None, str(e)
 
 
+def _list_users(tracker_url: str, token: str) -> list[dict]:
+    r, req_err = _safe_request(
+        "GET",
+        f"{tracker_url}/users",
+        headers=_auth_headers(token),
+        timeout=10,
+    )
+    if req_err or r is None or r.status_code != 200:
+        return []
+    return r.json()
+
+
+def _share_file_to_user(tracker_url: str, token: str, file_id: str, username: str, permission: str):
+    r, req_err = _safe_request(
+        "POST",
+        f"{tracker_url}/files/{file_id}/share",
+        json={"username": username, "permission": permission},
+        headers=_auth_headers(token),
+        timeout=10,
+    )
+    if req_err:
+        raise RuntimeError(req_err)
+    if r.status_code != 200:
+        raise RuntimeError(r.text)
+    return r.json()
+
+
 def _upload_bytes(
     blob: bytes,
     filename: str,
@@ -152,6 +179,18 @@ def _upload_bytes(
 
 
 def _download_file(file_id: str, token: str, tracker_url: str, parallelism: int) -> tuple[bytes, str]:
+    # Fetch file detail to get the real filename
+    detail_resp, detail_err = _safe_request(
+        "GET",
+        f"{tracker_url}/files/{file_id}",
+        headers=_auth_headers(token),
+        timeout=10,
+    )
+    real_filename = f"{file_id}.bin"
+    if not detail_err and detail_resp is not None and detail_resp.status_code == 200:
+        detail = detail_resp.json()
+        real_filename = detail.get("filename", real_filename)
+
     resp, req_err = _safe_request(
         "GET",
         f"{tracker_url}/files/{file_id}/download",
@@ -207,24 +246,151 @@ def _download_file(file_id: str, token: str, tracker_url: str, parallelism: int)
         if h.hexdigest() != expected_file_checksum:
             raise IOError("composite file checksum mismatch")
 
-    return ordered_bytes, f"{file_id}.bin"
+    return ordered_bytes, real_filename
+
+
+def _format_size(size_bytes: int) -> str:
+    """Return a human-friendly file size string."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+def _packet_demo_state() -> dict:
+    if "packet_demo" not in st.session_state:
+        st.session_state.packet_demo = {
+            "total": 12,
+            "received": list(range(8)),
+            "missing": [],
+            "resent": [],
+        }
+    return st.session_state.packet_demo
+
+
+def _set_packet_demo_state(received: list[int] | None = None, missing: list[int] | None = None, resent: list[int] | None = None):
+    state = _packet_demo_state()
+    if received is not None:
+        state["received"] = received
+    if missing is not None:
+        state["missing"] = missing
+    if resent is not None:
+        state["resent"] = resent
+
+
+def _render_packet_demo():
+    state = _packet_demo_state()
+    total = state["total"]
+    received = sorted(set(state["received"]))
+    missing = sorted(set(state["missing"]))
+    resent = sorted(set(state["resent"]))
+    received_set = set(received)
+    missing_set = set(missing)
+    resent_set = set(resent)
+
+    st.subheader("Packet Transfer Demo")
+    p1, p2, p3, p4 = st.columns(4)
+    if p1.button("Run transfer"):
+        _set_packet_demo_state(received=list(range(8)), missing=[], resent=[])
+    if p2.button("Simulate drop"):
+        _set_packet_demo_state(received=[i for i in range(total) if i not in {4, 9}], missing=[4, 9], resent=[])
+    if p3.button("Resume missing"):
+        if missing:
+            resumed = sorted(set(received) | set(missing))
+            _set_packet_demo_state(received=resumed, missing=[], resent=missing)
+    if p4.button("Reset"):
+        _set_packet_demo_state(received=list(range(8)), missing=[], resent=[])
+
+    progress = (len(received) / total) * 100 if total else 0
+    st.progress(progress / 100)
+    st.caption(f"{len(received)} / {total} packets received")
+
+    packet_cols = st.columns(6)
+    for packet_id in range(total):
+        if packet_id in received_set:
+            status = "Received"
+            color = "green"
+        elif packet_id in missing_set:
+            status = "Missing"
+            color = "red"
+        elif packet_id in resent_set:
+            status = "Resent"
+            color = "orange"
+        else:
+            status = "Pending"
+            color = "gray"
+
+        with packet_cols[packet_id % 6]:
+            st.markdown(
+                f"<div style='padding:0.6rem;border:1px solid {color};border-radius:8px;text-align:center;margin-bottom:0.5rem;background:rgba(255,255,255,0.03);'>"
+                f"<div style='font-weight:700'>#{packet_id}</div>"
+                f"<div style='font-size:0.7rem;color:{color};'>{status}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    st.caption("This demo shows the file being split into sequenced packets. When a connection drops, the receiver asks for only the missing packets and resumes from there.")
 
 
 def main():
-    st.set_page_config(page_title="File Sharing Platform", layout="wide")
+    st.set_page_config(page_title="FileVault — File Sharing Platform", layout="wide", page_icon="📁")
     _init_state()
-    st.title("File Sharing Platform")
-    st.caption("End-to-end distributed file sharing with replication, failover, and live cluster control")
+
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(135deg, #1e1e2f, #2b2b3d);
+            color: #f0f0f0;
+        }
+        .stButton > button {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #6366f1;
+            color: #fff;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            transition: all 0.2s ease;
+        }
+        .stButton > button:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #a78bfa;
+        }
+        .stSelectbox > div > div {
+            background: rgba(255,255,255,0.05) !important;
+            color: #fff !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    tracker_url = DEFAULT_TRACKER
+    parallelism = 4
+    chunk_size = 8 * 1024 * 1024
 
     with st.sidebar:
-        st.header("Settings")
+        st.header("⚙️ Settings")
         tracker_url = st.text_input("Tracker URL", value=DEFAULT_TRACKER)
         parallelism = st.slider("Transfer parallelism", min_value=1, max_value=16, value=4)
         chunk_size_mb = st.slider("Chunk size (MB)", min_value=1, max_value=32, value=8)
         chunk_size = chunk_size_mb * 1024 * 1024
 
+        if st.session_state.token:
+            st.divider()
+            st.subheader(f"👤 {st.session_state.username}")
+            if st.button("🚪 Logout", use_container_width=True, type="primary"):
+                st.session_state.token = ""
+                st.session_state.username = ""
+                st.session_state.download_blob = None
+                st.session_state.download_name = "download.bin"
+                st.session_state.pop("files_cache", None)
+                st.rerun()
+
         st.divider()
-        st.subheader("Cluster Lifecycle")
+        st.subheader("🖥️ Cluster Lifecycle")
         c1, c2 = st.columns(2)
         if c1.button("Start Tracker", use_container_width=True):
             _spawn("tracker", [sys.executable, "master_tracker.py"])
@@ -252,93 +418,88 @@ def main():
         st.dataframe(alive, use_container_width=True, hide_index=True)
 
     ok, status_payload, err = _tracker_status(tracker_url)
-    if ok:
-        st.success("Tracker is reachable")
-    else:
-        st.warning(f"Tracker is not reachable: {err}")
 
-    tab_auth, tab_upload, tab_files, tab_cluster = st.tabs(
-        ["Auth", "Upload", "Files", "Cluster"]
-    )
+    title_col, status_col = st.columns([3, 1])
+    with title_col:
+        st.title("📁 FileVault")
+        st.caption("Distributed file sharing with replication, failover & live cluster control")
+    with status_col:
+        if ok:
+            st.success("🟢 Tracker Online")
+        else:
+            st.error("🔴 Tracker Offline")
 
-    with tab_auth:
-        st.subheader("Register")
-        with st.form("register_form"):
-            reg_user = st.text_input("Username", key="reg_user")
-            reg_pass = st.text_input("Password", type="password", key="reg_pass")
-            reg_submit = st.form_submit_button("Create Account", disabled=not ok)
-        if reg_submit:
-            r, req_err = _safe_request(
-                "POST",
-                f"{tracker_url}/auth/register",
-                json={"username": reg_user, "password": reg_pass},
-                timeout=10,
-            )
-            if req_err:
-                st.error(f"Registration failed: {req_err}")
-            elif r.status_code == 200:
-                st.success("Registration successful")
-            else:
-                st.error(f"Registration failed: {r.text}")
-
-        st.subheader("Login")
-        with st.form("login_form"):
-            login_user = st.text_input("Username", key="login_user")
-            login_pass = st.text_input("Password", type="password", key="login_pass")
-            login_submit = st.form_submit_button("Login", disabled=not ok)
-        if login_submit:
-            r, req_err = _safe_request(
-                "POST",
-                f"{tracker_url}/auth/login",
-                json={"username": login_user, "password": login_pass},
-                timeout=10,
-            )
-            if req_err:
-                st.error(f"Login failed: {req_err}")
-            elif r.status_code == 200:
-                token = r.json()["token"]
-                st.session_state.token = token
-                st.session_state.username = login_user
-                st.success("Logged in")
-            else:
-                st.error(f"Login failed: {r.text}")
-
+    if not st.session_state.token:
+        st.divider()
         if not ok:
-            st.info("Tracker is offline. Start it from Cluster Lifecycle in the sidebar, then retry.")
+            st.info("⚡ Start the tracker from *Cluster Lifecycle* in the sidebar, then log in.")
 
-        if st.session_state.token:
-            st.info(f"Active session for user: {st.session_state.username}")
-            st.code(st.session_state.token)
+        login_col, spacer, register_col = st.columns([1, 0.2, 1])
 
-    with tab_upload:
-        st.subheader("Upload File")
-        if not st.session_state.token:
-            st.warning("Login first to upload files")
-        uploaded = st.file_uploader("Pick a file", type=None)
-        if st.button("Upload", disabled=(uploaded is None or not st.session_state.token)):
-            try:
-                progress_bar = st.progress(0)
-                progress_text = st.empty()
-                file_id = _upload_bytes(
-                    blob=uploaded.getvalue(),
-                    filename=uploaded.name,
-                    token=st.session_state.token,
-                    tracker_url=tracker_url,
-                    chunk_size=chunk_size,
-                    parallelism=parallelism,
-                    progress_bar=progress_bar,
-                    progress_text=progress_text,
-                )
-                st.success(f"Upload complete. File ID: {file_id}")
-            except Exception as e:
-                st.error(f"Upload failed: {e}")
+        with login_col:
+            st.subheader("🔑 Sign In")
+            with st.form("login_form"):
+                login_user = st.text_input("Username", key="login_user", placeholder="Enter your username")
+                login_pass = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password")
+                login_submit = st.form_submit_button("Sign In", disabled=not ok, use_container_width=True, type="primary")
+            if login_submit:
+                if not login_user or not login_pass:
+                    st.error("Please enter both username and password.")
+                else:
+                    r, req_err = _safe_request(
+                        "POST",
+                        f"{tracker_url}/auth/login",
+                        json={"username": login_user, "password": login_pass},
+                        timeout=10,
+                    )
+                    if req_err:
+                        st.error(f"❌ Connection error: {req_err}")
+                    elif r.status_code == 200:
+                        st.session_state.token = r.json()["token"]
+                        st.session_state.username = login_user
+                        st.success(f"✅ Welcome back, **{login_user}**!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid username or password.")
+
+        with register_col:
+            st.subheader("✨ Create Account")
+            with st.form("register_form"):
+                reg_user = st.text_input("Choose username", key="reg_user", placeholder="Pick a username")
+                reg_pass = st.text_input("Choose password", type="password", key="reg_pass", placeholder="Min 4 characters")
+                reg_confirm = st.text_input("Confirm password", type="password", key="reg_confirm", placeholder="Re-enter password")
+                reg_submit = st.form_submit_button("Create Account", disabled=not ok, use_container_width=True)
+            if reg_submit:
+                if not reg_user or not reg_pass:
+                    st.error("Please fill in all fields.")
+                elif reg_pass != reg_confirm:
+                    st.error("❌ Passwords do not match.")
+                elif len(reg_pass) < 4:
+                    st.error("❌ Password must be at least 4 characters.")
+                else:
+                    r, req_err = _safe_request(
+                        "POST",
+                        f"{tracker_url}/auth/register",
+                        json={"username": reg_user, "password": reg_pass},
+                        timeout=10,
+                    )
+                    if req_err:
+                        st.error(f"❌ Connection error: {req_err}")
+                    elif r.status_code == 200:
+                        st.success("✅ Account created! Sign in with your new credentials.")
+                    elif r.status_code == 409:
+                        st.error("❌ Username already taken. Try a different one.")
+                    else:
+                        st.error(f"❌ Registration failed: {r.text}")
+
+        st.stop()
+
+    tab_files, tab_upload, tab_cluster = st.tabs(["📂 My Files", "⬆️ Upload", "🖥️ Cluster"])
 
     with tab_files:
         st.subheader("Your Files")
-        if not st.session_state.token:
-            st.warning("Login first to list and download files")
-        files = []
-        if st.session_state.token and st.button("Refresh Files"):
+        files = st.session_state.get("files_cache", [])
+        if st.button("🔄 Refresh Files") or not files:
             r, req_err = _safe_request(
                 "GET",
                 f"{tracker_url}/files",
@@ -353,28 +514,64 @@ def main():
             else:
                 st.error(f"Could not fetch files: {r.text}")
 
-        files = st.session_state.get("files_cache", files)
         if files:
-            st.dataframe(files, use_container_width=True, hide_index=True)
-            file_ids = [f["id"] for f in files]
-            selected_file = st.selectbox("Select file", options=file_ids)
+            display_data = []
+            for f in files:
+                display_data.append({
+                    "📄 Filename": f.get("filename", "untitled"),
+                    "📦 Size": _format_size(f.get("size_bytes", 0)),
+                    "🔄 Status": f.get("status", "unknown").capitalize(),
+                    "📋 Version": f.get("current_version", 1),
+                })
+            st.dataframe(display_data, use_container_width=True, hide_index=True)
 
-            c1, c2 = st.columns(2)
-            if c1.button("Prepare Download", disabled=not st.session_state.token):
+            file_options = {}
+            for f in files:
+                fname = f.get("filename", "untitled")
+                short_id = f["id"][:8]
+                label = f"{fname}  ({short_id}…)"
+                file_options[label] = f["id"]
+
+            selected_label = st.selectbox("Select a file", options=list(file_options.keys()))
+            selected_file = file_options[selected_label]
+
+            st.markdown("---")
+            share_col1, share_col2 = st.columns([2, 1])
+            share_username = share_col1.text_input("Share with username", value="", placeholder="Enter a username")
+            share_permission = share_col2.selectbox("Permission", ["viewer", "editor"], index=0)
+            if st.button("🔗 Share File", disabled=not share_username):
                 try:
-                    blob, default_name = _download_file(
-                        file_id=selected_file,
-                        token=st.session_state.token,
+                    result = _share_file_to_user(
                         tracker_url=tracker_url,
-                        parallelism=parallelism,
+                        token=st.session_state.token,
+                        file_id=selected_file,
+                        username=share_username,
+                        permission=share_permission,
                     )
+                    st.success(f"✅ Shared with **{result['shared_with']}** ({result['permission']})")
+                    st.session_state.pop("files_cache", None)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Share failed: {e}")
+
+            st.markdown("---")
+            c1, c2 = st.columns(2)
+            if c1.button("⬇️ Prepare Download", use_container_width=True):
+                try:
+                    with st.spinner("Fetching file from cluster…"):
+                        blob, download_name = _download_file(
+                            file_id=selected_file,
+                            token=st.session_state.token,
+                            tracker_url=tracker_url,
+                            parallelism=parallelism,
+                        )
                     st.session_state.download_blob = blob
-                    st.session_state.download_name = default_name
-                    st.success("Download prepared. Use the button below to save it.")
+                    st.session_state.download_name = download_name
+                    st.success(f"✅ Ready to download: **{download_name}** ({_format_size(len(blob))})")
                 except Exception as e:
                     st.error(f"Download failed: {e}")
 
-            if c2.button("Delete File", disabled=not st.session_state.token):
+            if c2.button("🗑️ Delete File", use_container_width=True):
                 r, req_err = _safe_request(
                     "DELETE",
                     f"{tracker_url}/files/{selected_file}",
@@ -384,19 +581,47 @@ def main():
                 if req_err:
                     st.error(f"Delete failed: {req_err}")
                 elif r.status_code == 200:
-                    st.success("File deleted")
+                    st.success("✅ File deleted")
+                    st.session_state.pop("files_cache", None)
+                    st.rerun()
                 else:
                     st.error(f"Delete failed: {r.text}")
 
             if st.session_state.download_blob is not None:
                 st.download_button(
-                    label="Download File",
+                    label=f"💾 Save {st.session_state.download_name}",
                     data=st.session_state.download_blob,
                     file_name=st.session_state.download_name,
                     mime="application/octet-stream",
+                    use_container_width=True,
                 )
         else:
-            st.caption("No files loaded yet. Click Refresh Files.")
+            st.info("📭 No files yet. Upload your first file in the **Upload** tab!")
+
+    with tab_upload:
+        st.subheader("⬆️ Upload File")
+        uploaded = st.file_uploader("Pick a file to upload", type=None)
+        if uploaded:
+            st.info(f"📄 **{uploaded.name}** — {_format_size(uploaded.size)}")
+        if st.button("🚀 Upload", disabled=(uploaded is None), use_container_width=True, type="primary"):
+            try:
+                progress_bar = st.progress(0)
+                progress_text = st.empty()
+                file_id = _upload_bytes(
+                    blob=uploaded.getvalue(),
+                    filename=uploaded.name,
+                    token=st.session_state.token,
+                    tracker_url=tracker_url,
+                    chunk_size=chunk_size,
+                    parallelism=parallelism,
+                    progress_bar=progress_bar,
+                    progress_text=progress_text,
+                )
+                st.session_state.pop("files_cache", None)
+                st.success(f"✅ **{uploaded.name}** uploaded successfully!")
+                st.caption(f"File ID: `{file_id}`")
+            except Exception as e:
+                st.error(f"❌ Upload failed: {e}")
 
     with tab_cluster:
         st.subheader("Cluster Health")
@@ -413,6 +638,8 @@ def main():
             m3.metric("Degraded", files_state.get("degraded", 0))
             m4.metric("Uploading", files_state.get("uploading", 0))
             m5.metric("Failed", files_state.get("failed", 0))
+
+            _render_packet_demo()
 
             st.write("Nodes")
             st.dataframe(nodes, use_container_width=True, hide_index=True)

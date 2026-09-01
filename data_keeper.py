@@ -26,10 +26,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from shared.wire import send_msg, recv_msg, _recv_exact
 from shared.events import send_event
+from shared.udp_wire import UDPSender
 
 # ── CLI arguments ──
 NODE_ID = sys.argv[1]                       # e.g. "keeper1"
 PORT    = int(sys.argv[2])                  # e.g. 9001
+UDP_PORT = PORT + 1000                      # UDP port offset by 1000
 TRACKER_HOST, TRACKER_EVENT_PORT = "localhost", 8001
 STORAGE_DIR = os.path.join("data", NODE_ID)
 os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -207,6 +209,58 @@ def handle_conn(conn: socket.socket):
         conn.close()
 
 
+# ── UDP Download Handler ──
+
+def handle_udp_download(sock: socket.socket, file_id: str, chunk_idx: int, client_addr: tuple):
+    """Handle a UDP-based chunk download request with resumable support."""
+    path = chunk_path(file_id, chunk_idx)
+    if not os.path.exists(path):
+        return
+    
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+        
+        # Send via UDP with packet sequencing for resume capability
+        sender = UDPSender(client_addr[0], client_addr[1] + 1000, timeout=10.0)
+        sender.send_data(data)
+        sender.close()
+    except Exception:
+        pass
+
+
+def udp_server_loop():
+    """Listen for UDP DOWNLOAD requests on UDP_PORT."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", UDP_PORT))
+    print(f"[{NODE_ID}] UDP server listening on port {UDP_PORT}")
+    
+    while True:
+        try:
+            if paused.is_set():
+                time.sleep(0.1)
+                continue
+            
+            msg_bytes, client_addr = sock.recvfrom(1024)
+            msg_str = msg_bytes.decode().strip()
+            
+            # Parse simple message format: "file_id:chunk_idx"
+            if ":" in msg_str:
+                file_id, chunk_idx_str = msg_str.split(":", 1)
+                try:
+                    chunk_idx = int(chunk_idx_str)
+                    threading.Thread(
+                        target=handle_udp_download,
+                        args=(sock, file_id, chunk_idx, client_addr),
+                        daemon=True
+                    ).start()
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+
+
 # ── Heartbeat ──
 
 def heartbeat_loop():
@@ -231,7 +285,8 @@ def main():
     srv.bind(("0.0.0.0", PORT))
     srv.listen(64)
     threading.Thread(target=heartbeat_loop, daemon=True).start()
-    print(f"[{NODE_ID}] listening on port {PORT}")
+    threading.Thread(target=udp_server_loop, daemon=True).start()
+    print(f"[{NODE_ID}] TCP listening on port {PORT}, UDP on {UDP_PORT}")
     while True:
         conn, addr = srv.accept()
         pool.submit(handle_conn, conn)

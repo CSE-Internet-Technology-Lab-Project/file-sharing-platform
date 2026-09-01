@@ -134,6 +134,14 @@ def get_user_by_id(user_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def list_users() -> list[dict]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT id, username, created_at FROM users ORDER BY username ASC"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ── File helpers ──
 
 def create_file(file_id: str, owner_id: int, filename: str,
